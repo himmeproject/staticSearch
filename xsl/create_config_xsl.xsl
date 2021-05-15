@@ -429,7 +429,9 @@
                 
                 <xso:param>
                     <xsl:attribute name="name" select="$paramName"/>
-                    
+                    <xsl:if test="$paramName = 'indentJSON'">
+                        <xsl:attribute name="static" select="'true'"/>
+                    </xsl:if>
                     <xsl:choose>
                         <!--TODO: Make this smarter! Look at the ODD file
                             and see if the parameter is a boolean or not. If it is, do this, otherwise, just assume its a string
