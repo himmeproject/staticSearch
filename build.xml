@@ -259,7 +259,7 @@
     </xslt>
   </target>
 
-  <target name="json">
+<!--  <target name="json">
     <description>
       TARGET: json
       This target creates the individual token JSON files from the
@@ -271,9 +271,40 @@
     <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
       <arg value="-xsl:${ssBaseDir}/xsl/json.xsl"/>
       <arg value="-s:${ssBaseDir}/xsl/json.xsl"/>
+      <arg value="-\-suppressXsltNamespaceCheck:on"/>
+    </java>
+  </target>-->
+  
+  <target name="jsonTokens">
+    <description>
+      TARGET: jsonTokens
+      NEW APPROACH. This target creates the  token JSON files from the
+      body of the XHTML files created by the above tokenize task. It is run on itself and uses the
+      information in the configuration XSLT module (generated in the config task) to determine input
+      files, et cetera. Note that this DOES NOT create the filters </description>
+    <echo message="Creating JSON token files..."/>
+    <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
+      <arg value="-xsl:${ssBaseDir}/xsl/json_tokens.xsl"/>
+      <arg value="-s:${ssBaseDir}/xsl/json_tokens.xsl"/>
       <arg value="--suppressXsltNamespaceCheck:on"/>
     </java>
   </target>
+  
+  <target name="jsonFilters">
+    <description>
+      TARGET: jsonFilters
+      NEW APPROACH. This target creates the  filter JSON files from the
+      body of the XHTML files created by the above tokenize task. It is run on itself and uses the
+      information in the configuration XSLT module (generated in the config task) to determine input
+      files, et cetera. Note that this DOES NOT create the filters </description>
+    <echo message="Creating JSON filter files..."/>
+    <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
+      <arg value="-xsl:${ssBaseDir}/xsl/json_filters.xsl"/>
+      <arg value="-s:${ssBaseDir}/xsl/json_filters.xsl"/>
+      <arg value="--suppressXsltNamespaceCheck:on"/>
+    </java>
+  </target>
+  
 
   <target name="createStemsFile">
     <description>
@@ -453,7 +484,7 @@
   </target>
 
   <target name="all"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
+    depends="init, validate, config, tokenize, jsonTokens, jsonFilters, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
     <description>
       TARGET: all
       Default target for running the entire static search creation process.
@@ -461,7 +492,7 @@
   </target>
 
   <target name="allButValidate"
-    depends="init, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
+    depends="init, config, tokenize, jsonTokens, jsonFilters, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
     <description>
       TARGET: allButValidate
       Target to override validation, which is helpful in cases
@@ -470,7 +501,7 @@
   </target>
 
   <target name="test"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, makeDebugSearchPage, report">
+    depends="init, validate, config, tokenize, jsonTokens, jsonFilters, buildJS, createStemsFile, copyFiles, makeSearchPage, makeDebugSearchPage, report">
     <description>
       TARGET: test
       Target that runs the whole process, but does not clean up the
@@ -479,7 +510,7 @@
   </target>
 
   <target name="basic"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, clean">
+    depends="init, validate, config, tokenize, jsonTokens, jsonFilters, buildJS, createStemsFile, copyFiles, makeSearchPage, clean">
     <description>
       TARGET: basic
       Target that runs the whole process other than the report creation.

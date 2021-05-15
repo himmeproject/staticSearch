@@ -175,6 +175,11 @@
                 select="concat($tempDir,'/',$searchIdentifier,'_tokenized.html')"/>
             <xsl:variable name="excludedOutDoc" 
                 select="concat($tempDir,'/',$searchIdentifier,'_excluded.html')"/>
+        <xsl:variable name="tokenOutDoc"
+            select="concat($tempDir,'/tokens/',$searchIdentifier,'_tokens.html')"/>
+        <xsl:variable name="filterOutDoc"
+            select="concat($tempDir,'/filters/',$searchIdentifier,'_filters.html')"/>
+        
    
            
            <!--Now create the excluded document if we have to-->
@@ -222,24 +227,25 @@
                     <xsl:apply-templates select="$weighted" mode="contextualize"/>
                 </xsl:variable>
                 
-                <!--Now create the tokenized document-->
-                <xsl:result-document href="{$tokenizedOutDoc}">
-                    
-                    <!--If we're in verbose mode, then say what we're doing-->
-                    <xsl:if test="$verbose">
-                        <xsl:message>Creating <xsl:value-of select="$tokenizedOutDoc"/></xsl:message>
-                    </xsl:if>
-                    
-                    <!--Next tokenize and stem the contextualized document-->
-                    <xsl:variable name="tokenizedDoc">
-                        <xsl:apply-templates select="$contextualized" mode="tokenize">
-                            <xsl:with-param name="currDocUri" select="$uri" tunnel="yes"/>
-                        </xsl:apply-templates>
-                    </xsl:variable>
-                    
+                
+         
+                <!--Next tokenize and stem the contextualized document-->
+                <xsl:variable name="tokenizedDoc">
+                    <xsl:apply-templates select="$contextualized" mode="tokenize">
+                        <xsl:with-param name="currDocUri" select="$uri" tunnel="yes"/>
+                    </xsl:apply-templates>
+                </xsl:variable>
+                
+                <xsl:variable name="enumeratedDoc">
                     <!--And finally pass the tokenized document through the enumeration templates-->
                     <xsl:apply-templates select="$tokenizedDoc" mode="enumerate"/>
-                </xsl:result-document>
+                </xsl:variable>
+                
+                
+                <xsl:apply-templates select="$enumeratedDoc" mode="decapitate">
+                    <xsl:with-param name="tokenOutDoc" select="$tokenOutDoc" tunnel="yes"/>
+                    <xsl:with-param name="filterOutDoc" select="$filterOutDoc" tunnel="yes"/>
+                </xsl:apply-templates>
          
             
                 <!--If we're running in verbose mode, then output all of the interstitial
@@ -265,6 +271,8 @@
             </xsl:if>
         <!--</xsl:for-each>-->
     </xsl:template>
+    
+    
     
     
     <!--**************************************************************
@@ -743,6 +751,36 @@
             </xsl:if>
             <xsl:apply-templates select="@*|node()" mode="#current"/>
         </xsl:copy>
+    </xsl:template>
+    
+    
+    <!--DECAPITATE-->
+    
+    <xsl:template match="html" mode="decapitate">
+        <xsl:param name="tokenOutDoc" tunnel="yes"/>
+        <xsl:param name="filterOutDoc" tunnel="yes"/>
+        <!--If we're in verbose mode, then say what we're doing-->
+
+        
+        <!--First the tokens-->
+        <xsl:result-document href="{$tokenOutDoc}">
+      
+                <xsl:message>Creating <xsl:value-of select="$tokenOutDoc"/></xsl:message>
+            
+            <xsl:copy>
+                <xsl:sequence select="@*|body"/>
+            </xsl:copy>
+        </xsl:result-document>
+        
+        <!--Now the filters-->
+        <xsl:result-document href="{$filterOutDoc}">
+       
+                <xsl:message>Creating <xsl:value-of select="$filterOutDoc"/></xsl:message>
+            
+            <xsl:copy>
+                <xsl:sequence select="@*|head"/>
+            </xsl:copy>
+        </xsl:result-document>
     </xsl:template>
     
     

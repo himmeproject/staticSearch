@@ -75,7 +75,7 @@
         search tokens in the document collection, which we need for many of the different
         reports.</xd:desc>
     </xd:doc>
-    <xsl:variable name="spans" select="$tokenizedDocs//span[@ss-stem]"/>
+    <xsl:variable name="spans" select="for $doc in $tokenDocs return $doc//span[@ss-stem]"/>
     
     <xd:doc>
         <xd:desc><xd:ref name="filterFiles" type="variable">$filterFiles</xd:ref> are all of the filters
@@ -163,11 +163,11 @@
     
     <xsl:template name="createDiagnostics">
         
-        <xsl:variable name="docsWithoutIds" select="$tokenizedDocs//html[not(@id)]"/>
-        <xsl:variable name="docsWithoutLang" select="$tokenizedDocs//html[not(@lang)]"/>
+        <xsl:variable name="docsWithoutIds" select="$tokenDocs//html[not(@id)]"/>
+        <xsl:variable name="docsWithoutLang" select="$tokenDocs//html[not(@lang)]"/>
         <xsl:variable name="badNumericFilters"
-            select="$tokenizedDocs//meta[contains-token(@class,'staticSearch_num')][not(@content castable as xs:decimal)]"/>
-        <xsl:variable name="docsWithoutFragmentIds" select="$tokenizedDocs//body[not(descendant::*[@id])]"/>
+            select="$filterDocs//meta[contains-token(@class,'staticSearch_num')][not(@content castable as xs:decimal)]"/>
+        <xsl:variable name="docsWithoutFragmentIds" select="$tokenDocs//body[not(descendant::*[@id])]"/>
         
         <xsl:variable name="oneSidedBooleanFilters" as="element(li)*">
             <xsl:if test="$hasFilters = 'true'">
@@ -324,12 +324,12 @@
                 <tbody>
                     <tr>
                         <th>Total HTML Documents Analyzed</th>
-                        <td><xsl:value-of select="count($docUris)"/></td>
+                        <td><xsl:value-of select="count($tokenDocs)"/></td>
                     </tr>
                     <xsl:if test="$hasExclusions">
                         <tr>
                             <th>HTML Documents Excluded</th>
-                            <td><xsl:value-of select="count($docUris) - count($tokenizedDocs)"/></td>
+                            <td><xsl:value-of select="count($docUris) - count($tokenDocs)"/></td>
                         </tr>
                     </xsl:if>
  
@@ -356,8 +356,8 @@
                 <h2>Exclusions</h2>
                 <details>
                     <summary>Documents and filters excluded from this search...</summary>
-                    <xsl:variable name="docExcludes" select="$tokenizedDocs//html[@ss-excld]" as="element(html)*"/>
-                    <xsl:variable name="filterExcludes" select="$tokenizedDocs//meta[@ss-excld]" as="element(meta)*"/>
+                    <xsl:variable name="docExcludes" select="$tokenDocs//html[@ss-excld]" as="element(html)*"/>
+                    <xsl:variable name="filterExcludes" select="$filterDocs//meta[@ss-excld]" as="element(meta)*"/>
                     <table>
                         <tbody>
                             <tr>

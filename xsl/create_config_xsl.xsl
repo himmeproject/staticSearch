@@ -517,11 +517,13 @@
         <xso:variable name="docUris" 
             select="uri-collection(concat($collectionDir, {$sq || '?select=*.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))[not(starts-with(.,$tempDir))][not(ends-with(., $buildReportFilename))]"/>
         
-        <xso:variable name="tokenizedDocs" 
-            select="collection(concat($tempDir, {$sq || '?select=*_tokenized.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))"/>
+        <xso:variable name="tokenDocs" 
+            select="collection(concat($tempDir, {$sq || '/tokens?select=*_tokens.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))"/>
         
-        <xso:variable name="tokenizedUris" 
-            select="uri-collection(concat($tempDir, {$sq || '?select=*_tokenized.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))"/>
+        <xso:variable name="filterDocs" select="collection(concat($tempDir, {$sq || '/filters?select=*_filters.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))"/>
+            
+      <!--  <xso:variable name="tokenizedUris" 
+            select="uri-collection(concat($tempDir, {$sq || '?select=*_tokenized.*htm*;recurse=' || (if ($recurse) then 'yes' else 'no') || $sq}))"/>-->
         
         <xso:variable name="hasExclusions" 
             select="{if ($configDoc//exclude) then 'true' else 'false'}()"/>
