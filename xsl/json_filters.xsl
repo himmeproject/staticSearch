@@ -31,8 +31,7 @@
     </xd:doc>
     <xsl:include href="config.xsl"/>
     
-    
-    
+    <xsl:output  method="json" _indent="{$indentJSON}"/>
     
     <xsl:template match="/">
         <xsl:call-template name="createFiltersJson"/>
@@ -114,12 +113,13 @@
                 <xsl:variable name="thisFilterId"
                     select="$thisFilterTypeId || $thisFilterPos"
                     as="xs:string"/>
-                
-                <!--Now start constructing the map for each meta by name-->
-                <xsl:variable name="tmpMap" as="element(j:map)">
-                    <map xmlns="http://www.w3.org/2005/xpath-functions">
-                        <string key="filterId"><xsl:value-of select="$thisFilterId"/></string>
-                        <string key="filterName"><xsl:value-of select="$thisFilterName"/></string>
+   
+                <!--Now output the JSON-->
+                <xsl:result-document href="{$outDir || '/filters/' || $thisFilterId || $versionString || '.json'}">
+                    <xsl:message><xsl:value-of select="current-output-uri()"/></xsl:message>
+                    <xsl:map>
+                        <xsl:map-entry key="'filterId'" select="string($thisFilterId)"/>
+                        <xsl:map-entry key="'filterName'" select="string($thisFilterName)"/>
                         
                         <!--Now fork on filter types and call the respective functions-->
                         <xsl:choose>
@@ -139,11 +139,9 @@
                                 <xsl:message>WARNING: Unknown filter type: <xsl:value-of select="$thisFilterType"/></xsl:message>
                             </xsl:otherwise>
                         </xsl:choose>
-                    </map>
-                </xsl:variable>
-                <!--Now output the JSON-->
-                <xsl:result-document href="{$outDir || '/filters/' || $thisFilterId || $versionString || '.json'}" method="text">
-                    <xsl:value-of select="xml-to-json($tmpMap, map{'indent': $indentJSON})"/>
+                        
+                    </xsl:map>
+                   
                 </xsl:result-document>
                 
             </xsl:for-each-group>
@@ -168,37 +166,35 @@
             }
         </xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:createDescFeatFilterMap" as="element(j:map)+">
+    <xsl:function name="hcmc:createDescFeatFilterMap" as="map(*)*">
         <xsl:param name="metas" as="element(meta)+"/>
         <xsl:param name="filterIdPrefix" as="xs:string"/>
-        
-        <xsl:for-each-group select="$metas" group-by="xs:string(@content)">
-            <xsl:variable name="thisName"
-                select="current-grouping-key()"
-                as="xs:string"/>
-            <xsl:variable name="thisPosition"
-                select="position()"
-                as="xs:integer"/>
-            <xsl:variable name="filterId" 
-                select="$filterIdPrefix || '_' || $thisPosition" 
-                as="xs:string"/>
-            <xsl:variable name="declaredSortKey"
-                select="current-group()[@data-ssFilterSortKey][1]/@data-ssFilterSortKey"
-                as="xs:string?"/>
-            <xsl:variable name="currMetas" select="current-group()" as="element(meta)+"/>
-            
-            <map key="{$filterId}" xmlns="http://www.w3.org/2005/xpath-functions">
-                <string key="name"><xsl:value-of select="$thisName"/></string>
-                <string key="sortKey">
-                    <xsl:value-of select="if (exists($declaredSortKey)) then $declaredSortKey else $thisName"/>
-                </string>
-                <array key="docs">
-                    <xsl:for-each-group select="$currMetas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
-                        <string><xsl:value-of select="current-grouping-key()"/></string>
-                    </xsl:for-each-group>
-                </array>
-            </map>
-        </xsl:for-each-group>
+        <xsl:map>
+            <xsl:for-each-group select="$metas" group-by="xs:string(@content)">
+                <xsl:variable name="thisName"
+                    select="current-grouping-key()"
+                    as="xs:string"/>
+                <xsl:variable name="thisPosition"
+                    select="position()"
+                    as="xs:integer"/>
+                <xsl:variable name="filterId" 
+                    select="$filterIdPrefix || '_' || $thisPosition" 
+                    as="xs:string"/>
+                <xsl:variable name="declaredSortKey"
+                    select="current-group()[@data-ssFilterSortKey][1]/@data-ssFilterSortKey"
+                    as="xs:string?"/>
+                <xsl:variable name="currMetas" select="current-group()" as="element(meta)+"/>
+                <xsl:variable name="docsArray" select="hcmc:getDocsArrayFromMetas($currMetas)" as="array(xs:string)"/>
+                
+                <xsl:map-entry key="$filterId">
+                    <xsl:map>
+                        <xsl:map-entry key="'name'" select="string($thisName)"/>
+                        <xsl:map-entry key="'sortKey'" select="if (exists($declaredSortKey)) then $declaredSortKey else $thisName"/>
+                        <xsl:map-entry key="'docs'" select="$docsArray"/>
+                    </xsl:map>
+                </xsl:map-entry>
+            </xsl:for-each-group>
+        </xsl:map>
     </xsl:function>
     
     <xd:doc>
@@ -218,42 +214,43 @@
             }
         </xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:createBoolFilterMap" as="element(j:map)+">
+    <xsl:function name="hcmc:createBoolFilterMap" as="map(*)">
         <xsl:param name="metas" as="element(meta)+"/>
         <xsl:param name="filterIdPrefix" as="xs:string"/>
+      <xsl:map>
+          <xsl:for-each-group select="$metas" group-by="hcmc:normalize-boolean(@content)">
+              
+              <!--We have to sort these descending so that we reliably get true followed by false. -->
+              <xsl:sort select="current-grouping-key()" order="descending"/>
+              
+              <xsl:variable name="thisValue"
+                  select="current-grouping-key()"
+                  as="xs:string"/>
+              <xsl:variable name="thisPosition"
+                  select="position()"
+                  as="xs:integer"/>
+              <xsl:variable name="filterId" 
+                  select="$filterIdPrefix || '_' || $thisPosition" 
+                  as="xs:string"/>
+              <xsl:variable name="currMetas" 
+                  select="current-group()"
+                  as="element(meta)+"/>
+              
+              <!--If there under two categories, and we're grouping, then we have a lopsided boolean-->
+              <xsl:if test="last() lt 2">
+                  <xsl:message><xsl:value-of select="$filterId"/> only contains <xsl:value-of select="$thisValue"/>.</xsl:message>
+              </xsl:if>
+              <xsl:variable name="docsArray" select="hcmc:getDocsArrayFromMetas($currMetas)" as="array(xs:string)"/>
+              
+              <xsl:map-entry key="$filterId">
+                  <xsl:map>
+                      <xsl:map-entry key="'value'" select="$thisValue"/>
+                      <xsl:map-entry key="'docs'" select="$docsArray"/>
+                  </xsl:map>
+              </xsl:map-entry>
+          </xsl:for-each-group>
+      </xsl:map>
         
-        <xsl:for-each-group select="$metas" group-by="hcmc:normalize-boolean(@content)">
-            
-            <!--We have to sort these descending so that we reliably get true followed by false. -->
-            <xsl:sort select="current-grouping-key()" order="descending"/>
-            
-            <xsl:variable name="thisValue"
-                select="current-grouping-key()"
-                as="xs:string"/>
-            <xsl:variable name="thisPosition"
-                select="position()"
-                as="xs:integer"/>
-            <xsl:variable name="filterId" 
-                select="$filterIdPrefix || '_' || $thisPosition" 
-                as="xs:string"/>
-            <xsl:variable name="currMetas" 
-                select="current-group()"
-                as="element(meta)+"/>
-            
-            <!--If there under two categories, and we're grouping, then we have a lopsided boolean-->
-            <xsl:if test="last() lt 2">
-                <xsl:message><xsl:value-of select="$filterId"/> only contains <xsl:value-of select="$thisValue"/>.</xsl:message>
-            </xsl:if>
-            
-            <map key="{$filterId}" xmlns="http://www.w3.org/2005/xpath-functions">
-                <string key="value"><xsl:value-of select="$thisValue"/></string>
-                <array key="docs">
-                    <xsl:for-each-group select="$currMetas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
-                        <string><xsl:value-of select="current-grouping-key()"/></string>
-                    </xsl:for-each-group>
-                </array>
-            </map>
-        </xsl:for-each-group>
     </xsl:function>
     
     <xd:doc>
@@ -268,24 +265,30 @@
             }
         </xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:createDateFilterMap" as="element(j:map)">
+    <xsl:function name="hcmc:createDateFilterMap" as="map(*)">
         <xsl:param name="metas" as="element(meta)+"/>
         <xsl:param name="filterIdPrefix" as="xs:string"/>
-        <map key="docs" xmlns="http://www.w3.org/2005/xpath-functions">
-            <xsl:for-each-group select="$metas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
-                <xsl:variable name="docUri" select="current-grouping-key()" as="xs:string"/>
-                <xsl:variable name="metasForDoc" select="current-group()" as="element(meta)+"/>
-                <array key="{$docUri}">
-                    <xsl:for-each select="$metasForDoc">
-                        <!--Split the date on slashes, which represent a range of dates-->
-                        <!--TODO: Verify that there are proper dates here-->
-                        <xsl:for-each select="tokenize(@content,'/')">
-                            <string><xsl:value-of select="."/></string>
-                        </xsl:for-each>
-                    </xsl:for-each>
-                </array>
-            </xsl:for-each-group>
-        </map>
+        
+        <xsl:map>
+            <xsl:map-entry key="'docs'">
+                <xsl:map>
+                    <xsl:for-each-group select="$metas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
+                        <xsl:variable name="docUri" select="current-grouping-key()" as="xs:string"/>
+                        <xsl:variable name="metasForDoc" select="current-group()" as="element(meta)+"/>
+                        <xsl:variable name="dates" as="xs:string+">
+                            <xsl:for-each select="$metasForDoc">
+                                <!--Split the date on slashes, which represent a range of dates-->
+                                <!--TODO: Verify that there are proper dates here-->
+                                <xsl:for-each select="tokenize(@content,'/')">
+                                    <xsl:sequence select="."/>
+                                </xsl:for-each>
+                            </xsl:for-each>
+                        </xsl:variable>
+                        <xsl:map-entry key="$docUri" select="array{$dates}"/>
+                    </xsl:for-each-group>
+                </xsl:map>
+            </xsl:map-entry>
+        </xsl:map>
     </xsl:function>
     
     <xd:doc>
@@ -301,20 +304,38 @@
             }
         </xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:createNumFilterMap" as="element(j:map)">
+    <xsl:function name="hcmc:createNumFilterMap" as="map(*)">
         <xsl:param name="metas" as="element(meta)+"/>
         <xsl:param name="filterIdPrefix" as="xs:string"/>
-        <map key="docs" xmlns="http://www.w3.org/2005/xpath-functions">
-            <xsl:for-each-group select="$metas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
-                <xsl:variable name="docUri" select="current-grouping-key()" as="xs:string"/>
-                <xsl:variable name="metasForDoc" select="current-group()" as="element(meta)+"/>
-                <array key="{$docUri}">
-                    <xsl:for-each-group select="current-group()[@content castable as xs:decimal]" group-by="xs:decimal(@content)">
-                        <string><xsl:value-of select="xs:decimal(current-grouping-key())"/></string>
+        <xsl:map>
+            <xsl:map-entry key="'docs'">
+                <xsl:map>
+                    <xsl:for-each-group select="$metas" group-by="string(ancestor::html/@data-staticSearch-relativeUri)">
+                        <xsl:variable name="docUri" select="current-grouping-key()" as="xs:string"/>
+                        <xsl:variable name="metasForDoc" select="current-group()" as="element(meta)+"/>
+                        <!--NOTE THAT THESE ARE STRINGS-->
+                        <xsl:variable name="nums" as="xs:string*">
+                            <xsl:for-each-group select="current-group()[@content castable as xs:decimal]" group-by="xs:decimal(@content)">
+                                <xsl:sequence select="xs:decimal(current-grouping-key()) => xs:string()"/>
+                            </xsl:for-each-group>
+                        </xsl:variable>
+                        <xsl:map-entry key="$docUri" select="array{$nums}"/>
                     </xsl:for-each-group>
-                </array>
-            </xsl:for-each-group>
-        </map>
+                </xsl:map>
+            </xsl:map-entry>
+        </xsl:map>
+    </xsl:function>
+    
+    <xd:doc>
+        <xd:desc><xd:ref name="hcmc:getDocsArrayFromMetas" type="function">hcmc:getDocsArrayFromMetas</xd:ref>
+            takes all of the metas for a filter, compiles the distinct document URIs, and
+            returns those as an array of strings.</xd:desc>
+        <xd:param name="currMetas">The current set of metas for a filter.</xd:param>
+        <xd:return>An array of document URIs as strings.</xd:return>
+    </xd:doc>
+    <xsl:function name="hcmc:getDocsArrayFromMetas" as="array(xs:string)">
+        <xsl:param name="currMetas" as="element(meta)*"/>
+        <xsl:sequence select="array{distinct-values(for $meta in $currMetas return string(root($meta)/html/@data-staticSearch-relativeUri))}"/>
     </xsl:function>
     
     
@@ -331,11 +352,8 @@
     </xd:doc>
     <xsl:template name="createStopwordsJson">
         <xsl:message>Creating stopwords array...</xsl:message>
-        <xsl:result-document href="{$outDir}/ssStopwords{$versionString}.json" method="text">
-            <xsl:variable name="map">
-                <xsl:apply-templates select="$stopwordsFileXml" mode="dictToArray"/>
-            </xsl:variable>
-            <xsl:value-of select="xml-to-json($map, map{'indent': $indentJSON})"/>
+        <xsl:result-document href="{$outDir}/ssStopwords{$versionString}.json">
+            <xsl:apply-templates select="$stopwordsFileXml" mode="dictToArray"/>
         </xsl:result-document>
     </xsl:template>
     
@@ -354,21 +372,16 @@
         to be used when displaying results in the search page.</xd:desc>
     </xd:doc>
     <xsl:template name="createTitleJson">
-        <xsl:result-document href="{$outDir}/ssTitles{$versionString}.json" method="text">
-            <xsl:variable name="map" as="element(j:map)">
-                <map xmlns="http://www.w3.org/2005/xpath-functions">
-                    <xsl:for-each select="$filterDocs//html">
-                        <array key="{@data-staticSearch-relativeUri}">
-                            <string><xsl:value-of select="hcmc:getDocTitle(.)"/></string>
-                             <!--Add a thumbnail graphic if one is specified. This generates
-                            an empty string or nothing if there isn't. -->
-                            <xsl:sequence select="hcmc:getDocThumbnail(.)"/>
-                            <xsl:sequence select="hcmc:getDocSortKey(.)"/>
-                        </array>
-                    </xsl:for-each>
-                </map>
-            </xsl:variable>
-            <xsl:sequence select="xml-to-json($map, map{'indent': $indentJSON})"/>
+        <xsl:result-document href="{$outDir}/ssTitles{$versionString}.json">
+            <xsl:map>
+                <xsl:for-each select="$filterDocs//html">
+                    <xsl:map>
+                        <xsl:map-entry 
+                            key="@data-staticSearch-relativeUri" 
+                            select="array{hcmc:getDocTitle(.), hcmc:getDocThumbnail(.), hcmc:getDocSortKey(.)}"/>
+                    </xsl:map>
+                </xsl:for-each>
+            </xsl:map>
         </xsl:result-document>
     </xsl:template>
     
@@ -391,11 +404,8 @@
     </xd:doc>
     <xsl:template name="createConfigJson">
         <xsl:message>Creating Configuration JSON file....</xsl:message>
-        <xsl:result-document href="{$outDir}/config{$versionString}.json" method="text">
-            <xsl:variable name="map">
-                <xsl:apply-templates select="doc($configFile)" mode="configToArray"/>
-            </xsl:variable>
-            <xsl:value-of select="xml-to-json($map, map{'indent': $indentJSON})"/>
+        <xsl:result-document href="{$outDir}/config{$versionString}.json">
+            <xsl:apply-templates select="doc($configFile)" mode="configToArray"/>
         </xsl:result-document>
     </xsl:template>
     
@@ -412,11 +422,12 @@
         of word elements inside a words element to a JSON/XML structure.</xd:desc>
     </xd:doc>
     <xsl:template match="hcmc:words" mode="dictToArray">
-        <j:map>
-            <j:array key="words">
-                <xsl:apply-templates mode="#current"/>
-            </j:array>
-        </j:map>
+        <xsl:variable name="words" as="xs:string*">
+            <xsl:apply-templates mode="#current"/>
+        </xsl:variable>
+        <xsl:map>
+            <xsl:map-entry key="'words'" select="array{$words}"/>
+        </xsl:map>
     </xsl:template>
 
     <xd:doc>
@@ -424,7 +435,7 @@
             a words element to a JSON/XML string.</xd:desc>
     </xd:doc>
     <xsl:template match="hcmc:word" mode="dictToArray">
-        <j:string><xsl:value-of select="."/></j:string>
+        <xsl:sequence select="string(.)"/>
     </xsl:template>
     
 
@@ -438,30 +449,33 @@
         <xd:desc>Template to convert an hcmc:config element to a JSON map.</xd:desc>
     </xd:doc>
     <xsl:template match="hcmc:config" mode="configToArray">
-        <j:map key="config">
-            <xsl:apply-templates mode="#current"/>
-        </j:map>
+        <xsl:map>
+            <xsl:map-entry key="'config'">
+                <xsl:map>
+                    <xsl:apply-templates select="hcmc:params" mode="#current"/>
+                </xsl:map>
+
+            </xsl:map-entry>
+        </xsl:map>
     </xsl:template>
 
     <xd:doc>
         <xd:desc>Template to convert an hcmc:params element to a JSON array.</xd:desc>
     </xd:doc>
     <xsl:template match="hcmc:params" mode="configToArray">
-        <j:array key="params">
-            <j:map>
-                <xsl:apply-templates mode="#current"/>
-            </j:map>
-        </j:array>
+        <xsl:variable name="result" as="map(*)*">
+            <xsl:apply-templates select="hcmc:*" mode="#current"/>
+        </xsl:variable>
+        <xsl:map-entry key="'params'" select="array{$result}"/>
     </xsl:template>
 
     <xd:doc>
         <xd:desc>Template to convert any child of an hcmc:params element to a JSON value.</xd:desc>
     </xd:doc>
     <xsl:template match="hcmc:params/hcmc:*" mode="configToArray">
-        <xsl:element namespace="http://www.w3.org/2005/xpath-functions" name="{if (text() castable as xs:integer) then 'number' else 'string'}">
-            <xsl:attribute name="key" select="local-name()"/>
-            <xsl:apply-templates mode="#current"/>
-        </xsl:element>
+        <xsl:map>
+            <xsl:map-entry key="local-name()" select="if (text() castable as xs:integer) then xs:integer(text()) else xs:string(text())"/>
+        </xsl:map>
     </xsl:template>
     
     
@@ -522,7 +536,7 @@
         second case so that the sort key ends up at the right 
         position in the array.</xd:result>
     </xd:doc>
-    <xsl:function name="hcmc:getDocThumbnail" as="element(j:string)?">
+    <xsl:function name="hcmc:getDocThumbnail" as="xs:string?">
         <xsl:param name="doc" as="element(html)"/>
         <xsl:variable name="docImage" select="$doc/head/meta[@name='docImage'][contains-token(@class,'staticSearch_docImage')][not(@ss-excld)]" 
             as="element(meta)*"/>
@@ -534,10 +548,11 @@
                 <xsl:if test="count($docImage) gt 1">
                     <xsl:message>WARNING: Multiple docImages declared in <xsl:value-of select="$doc/@data-staticSearch-relativeUri"/>. Using <xsl:value-of select="$docImage[1]/@content"/></xsl:message>
                 </xsl:if>
-                <j:string><xsl:value-of select="$docImage[1]/@content"/></j:string>
+                <xsl:sequence select="xs:string($docImage[1]/@content)"/>
+             
             </xsl:when>
             <xsl:when test="exists($docSortKey)">
-                <j:string></j:string>
+                <xsl:sequence select="''"/>
             </xsl:when>
         </xsl:choose>
     </xsl:function>
@@ -550,7 +565,7 @@
         <xd:param name="doc">The input document, which must be an HTML element.</xd:param>
         <xd:result>A j:string element, if there is a configured sort key, or the empty sequence.</xd:result>
     </xd:doc>
-    <xsl:function name="hcmc:getDocSortKey" as="element(j:string)?">
+    <xsl:function name="hcmc:getDocSortKey" as="xs:string?">
         <xsl:param name="doc" as="element(html)"/>
         <xsl:variable name="docSortKey" 
             select="$doc/head/meta[@name='docSortKey'][contains-token(@class,'staticSearch_docSortKey')][not(@ss-excld)]" 
@@ -559,7 +574,7 @@
             <xsl:if test="count($docSortKey) gt 1">
                 <xsl:message>WARNING: Multiple docSortKeys declared in <xsl:value-of select="$doc/@data-staticSearch-relativeUri"/>. Using <xsl:value-of select="$docSortKey[1]/@content"/></xsl:message>
             </xsl:if>
-            <j:string><xsl:value-of select="$docSortKey[1]/@content"/></j:string>
+            <xsl:sequence select="string($docSortKey[1]/@content)"/>
         </xsl:if>
     </xsl:function>
     

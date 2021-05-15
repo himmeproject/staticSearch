@@ -36,6 +36,11 @@
     </xd:doc>
     <xsl:include href="config.xsl"/>
     
+    <xd:doc>
+        <xd:desc>Parameter for switching new-each-time.</xd:desc>
+    </xd:doc>
+    <xsl:param name="new-each-time" select="'yes'" as="xs:string" static="yes"/>
+    
     
     <!--**************************************************************
        *                                                            *
@@ -190,15 +195,14 @@
     </xd:doc>
     <xsl:template name="createStemmedTokenJson">
         <xsl:message>Found <xsl:value-of select="$tokenizedDocsCount"/> tokenized documents...</xsl:message>
+        
         <!--Group all of the stems by their values;  tokenizing is a bit overzealous here-->
         <xsl:for-each-group select="$stems" group-by="tokenize(@ss-stem,'\s+')">
             <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
-            <xsl:call-template name="makeTokenCounterMsg"/>
-            <xsl:variable name="map" as="element(j:map)">
+            <xsl:result-document href="{$outDir}/stems/{$stem}{$versionString}.json" method="json" _indent="{$indentJSON}">
+                <xsl:message><xsl:value-of select="current-output-uri()"/></xsl:message>
+                <xsl:call-template name="makeTokenCounterMsg"/>
                 <xsl:call-template name="makeMap"/>
-            </xsl:variable>
-            <xsl:result-document href="{$outDir}/stems/{$stem}{$versionString}.json" method="text">
-                <xsl:sequence select="xml-to-json($map, map{'indent': $indentJSON})"/>
             </xsl:result-document>
         </xsl:for-each-group>
     </xsl:template>
@@ -259,7 +263,7 @@
            </xd:ul>
         </xd:desc>
     </xd:doc>
-    <xsl:template name="makeMap" as="element(j:map)">
+    <xsl:template name="makeMap" as="map(*)">
         <!--The term we're creating a JSON for, inherited from the createMap template -->
         <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
         
@@ -267,89 +271,67 @@
             in its @ss-stem -->
         <xsl:variable name="stemGroup" select="current-group()" as="element(span)*"/>
         
-        <!--Create the outermost part of the structure-->
-        <map xmlns="http://www.w3.org/2005/xpath-functions">
-
-           <!--The stem is the top level string key for this map; it should be
-                the same as the JSON file name.-->
-            <string key="stem">
-                <xsl:value-of select="$stem"/>
-            </string>
-
-             <!--Start instances array: this contains all of the instances of the stem
-                 per document -->
-            <array key="instances">
-
-                <!--If every HTML document processed has an @id at the root,
-                    then use that as the grouping-key; otherwise,
-                    use the document uri -->
-                <xsl:for-each-group select="$stemGroup"
-                    group-by="document-uri(/)">
-                    <!--Sort the documents so that the document with the most number of this hit comes first-->
-                    <xsl:sort select="count(current-group())" order="descending"/>
-                    
-                    <!--The current document uri, which functions as the key for grouping the spans-->
-                    <xsl:variable name="currDocUri" select="current-grouping-key()" as="xs:string"/>
-                    
-                    <!--The spans that are contained within this document-->
-                    <xsl:variable name="thisDocSpans" select="current-group()" as="element(span)*"/>
-
-                    <!--Get the total number of documents (i.e. the number of iterations that this
+        <xsl:variable name="instances" as="map(*)*">
+            <xsl:for-each-group select="$stemGroup"
+                group-by="document-uri(/)">
+                <!--Sort the documents so that the document with the most number of this hit comes first-->
+                <xsl:sort select="count(current-group())" order="descending"/>
+                
+                <!--The current document uri, which functions as the key for grouping the spans-->
+                <xsl:variable name="currDocUri" select="current-grouping-key()" as="xs:string"/>
+                
+                <!--The spans that are contained within this document-->
+                <xsl:variable name="thisDocSpans" select="current-group()" as="element(span)*"/>
+                
+                <!--Get the total number of documents (i.e. the number of iterations that this
                         for-each-group will perform) for this span-->
-                    <xsl:variable name="stemDocsCount" select="last()" as="xs:integer"/>
-                    <xsl:if test="$verbose">
-                        <xsl:message><xsl:value-of select="$stem"/>: Processing <xsl:value-of select="$currDocUri"/></xsl:message>
+                <xsl:variable name="stemDocsCount" select="last()" as="xs:integer"/>
+                <xsl:if test="$verbose">
+                    <xsl:message><xsl:value-of select="$stem"/>: Processing <xsl:value-of select="$currDocUri"/></xsl:message>
+                </xsl:if>
+                
+                <!--The document that we want to process will always be the ancestor html of
+                        any item of the current-group() -->
+                <xsl:variable name="thisDoc"
+                    select="current-group()[1]/ancestor::html"
+                    as="element(html)"/>
+                
+                <!--Get the raw score of all the spans by getting the weight for 
+                        each span and then adding them all together -->
+                <xsl:variable name="rawScore" 
+                    select="sum(for $span in $thisDocSpans return hcmc:returnWeight($span))"
+                    as="xs:integer"/>
+                
+                <xsl:map>
+                    <xsl:map-entry key="'docId'" select="string($thisDoc/@id)"/>
+                    <xsl:map-entry key="'docUri'" select="string($thisDoc/@data-staticSearch-relativeUri)"/>
+                    <xsl:map-entry key="'score'">
+                        <xsl:choose>
+                            <xsl:when test="$scoringAlgorithm = 'tf-idf'">
+                                <xsl:sequence select="hcmc:returnTfIdf($rawScore, $stemDocsCount, $currDocUri)"/>
+                            </xsl:when>
+                            <xsl:otherwise>
+                                <xsl:sequence select="$rawScore"/>
+                            </xsl:otherwise>
+                        </xsl:choose>
+                    </xsl:map-entry>
+                    <!--Now add the contexts array, if specified to do so -->
+                    <xsl:if test="$phrasalSearch or $createContexts">
+                        <xsl:map-entry key="'contexts'">
+                            <xsl:call-template name="returnContextsArray"/>
+                        </xsl:map-entry>
+        
                     </xsl:if>
                     
-                    <!--The document that we want to process will always be the ancestor html of
-                        any item of the current-group() -->
-                    <xsl:variable name="thisDoc"
-                        select="current-group()[1]/ancestor::html"
-                        as="element(html)"/>
-                    
-                    <!--Get the raw score of all the spans by getting the weight for 
-                        each span and then adding them all together -->
-                    <xsl:variable name="rawScore" 
-                        select="sum(for $span in $thisDocSpans return hcmc:returnWeight($span))"
-                        as="xs:integer"/>
-                    
-                   <!--Map for each document that has this token-->
-                    <map xmlns="http://www.w3.org/2005/xpath-functions">
-                        <!--Now the document ID, which we've created (if necessary) in the
-                        tokenization step -->
-                        <string key="docId">
-                            <xsl:value-of select="$thisDoc/@id"/>
-                        </string>
-                        
-                        <!--And the relative URI from the document, which is to be used
-                        for linking from the KWIC to the document. We've created this
-                        already in the tokenization stage and stored it in a custom
-                        data-attribute-->
-                        <string key="docUri">
-                            <xsl:value-of select="$thisDoc/@data-staticSearch-relativeUri"/>
-                        </string>
-                        
-                        <!--The document's score, forked depending on configured
-                            algorithm -->
-                        <number key="score">
-                            <xsl:choose>
-                                <xsl:when test="$scoringAlgorithm = 'tf-idf'">
-                                    <xsl:sequence select="hcmc:returnTfIdf($rawScore, $stemDocsCount, $currDocUri)"/>
-                                </xsl:when>
-                                <xsl:otherwise>
-                                    <xsl:sequence select="$rawScore"/>
-                                </xsl:otherwise>
-                            </xsl:choose>
-                        </number>
-                        
-                        <!--Now add the contexts array, if specified to do so -->
-                        <xsl:if test="$phrasalSearch or $createContexts">
-                            <xsl:call-template name="returnContextsArray"/>
-                        </xsl:if>
-                    </map>
-                </xsl:for-each-group>
-            </array>
-        </map>
+                </xsl:map>
+            </xsl:for-each-group>
+        </xsl:variable>
+        
+        
+        <xsl:map>
+            <xsl:map-entry key="'stem'" select="$stem"/>
+            <xsl:map-entry key="'instances'" select="array{$instances}"/>
+        </xsl:map>
     </xsl:template>
     
     <xd:doc>
@@ -376,7 +358,7 @@
             </xd:li>
         </xd:desc>
     </xd:doc>
-    <xsl:template name="returnContextsArray">
+    <xsl:template name="returnContextsArray" as="array(*)">
         <!--The document that we want to process will always be the ancestor html of
                         any item of the current-group() -->
         <xsl:variable name="thisDoc"
@@ -393,9 +375,7 @@
             else subsequence(current-group(), 1, $maxKwicsToHarvest)"/>        
         <xsl:variable name="contextCount" select="count($contexts)" as="xs:integer"/>
         
-        <array xmlns="http://www.w3.org/2005/xpath-functions" key="contexts">
-            <!--Create a map for each hit in the document with data about that
-                context-->
+        <xsl:variable name="contexts" as="map(*)*">
             <xsl:for-each select="$contexts">
                 <!--Sort the contexts first by weight (highest to lowest) and then
                 by position in the document (earliest to latest)-->
@@ -409,37 +389,32 @@
                 <!--Accumulated properties map, which may or may not exist -->
                 <xsl:variable name="properties"
                     select="accumulator-before('properties')" as="map(*)?"/>                
-                <map>
-                    <string key="form">
-                        <xsl:sequence select="string(.)"/>
-                    </string>
-                    <string key="weight">
-                        <xsl:sequence select="hcmc:returnWeight(.)"/>
-                    </string>
-                    <number key="pos">
-                        <xsl:sequence select="xs:integer(@ss-pos)"/>
-                    </number>
-                    <string key="context">
-                        <xsl:sequence select="hcmc:returnContext(.)"/>
-                    </string>
-                    <!--Get the best fragment id if that's set-->
+                <xsl:map>
+                    <xsl:map-entry key="'form'" select="string(.)"/>
+                    <xsl:map-entry key="'weight'" select="hcmc:returnWeight(.)"/>
+                    <xsl:map-entry key="'pos'" select="xs:integer(@ss-pos)"/>
+                    <xsl:map-entry key="'context'" select="hcmc:returnContext(.)"/>
                     <xsl:if test="$linkToFragmentId and @ss-fid">
-                        <string key="fid">
-                            <xsl:value-of select="@ss-fid"/>
-                        </string>
+                        <xsl:map-entry key="'fid'">
+                            <xsl:value-of select="string(@ss-fid)"/>
+                        </xsl:map-entry>
                     </xsl:if>
+                    
                     <!--Now we add the custom properties, if we need to-->
                     <xsl:if test="exists($properties) and map:size($properties) gt 0">
-                        <map key="prop">
-                            <xsl:for-each select="map:keys($properties)">
-                                <xsl:variable name="propVal" select="map:get($properties,.)[last()]" as="xs:string"/>
-                                <string key="{.}"><xsl:value-of select="$propVal"/></string>
-                            </xsl:for-each>
-                        </map>                
+                        <xsl:map-entry key="'prop'">
+                            <xsl:map>
+                                <xsl:for-each select="map:keys($properties)">
+                                    <xsl:map-entry key="." select="array{$properties(.)}"/>
+                                </xsl:for-each>
+                            </xsl:map>
+                            
+                        </xsl:map-entry>
                     </xsl:if>
-                </map>
+                </xsl:map>
             </xsl:for-each>
-        </array>
+        </xsl:variable>
+        <xsl:sequence select="array{$contexts}"/>
     </xsl:template>
     
     
@@ -478,7 +453,7 @@
         <xd:param name="dataAtt">The local name of the attribute to process (i.e. data-ss-title, data-ss-my-value).</xd:param>
         <xd:return>The key for the property (title, my-value).</xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:dataAttToProp" as="xs:string" new-each-time="no">
+    <xsl:function name="hcmc:dataAttToProp" as="xs:string" _new-each-time="{$new-each-time}">
         <xsl:param name="dataAtt" as="xs:string"/>
         <xsl:variable name="suffix" select="substring-after($dataAtt,'data-ss-')" as="xs:string"/>
         <xsl:sequence select="$suffix"/>
@@ -690,7 +665,7 @@
         <xd:param name="span">The span element for which to retrieve the weight.</xd:param>
         <xd:return>The value of the span's weight derived from the ancestor or, if no ancestor, then 1.</xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:returnWeight" as="xs:integer" new-each-time="no">
+    <xsl:function name="hcmc:returnWeight" as="xs:integer" _new-each-time="{$new-each-time}">
         <xsl:param name="span" as="element(span)"/>
         <xsl:sequence select="$span/accumulator-before('weight')[last()]"/>
     </xsl:function>
@@ -701,7 +676,7 @@
         context ancestor is the desired context. Note that this function is cached, since it's called many times.</xd:desc>
         <xd:param name="contextEl">The context element.</xd:param>
     </xd:doc>
-    <xsl:function name="hcmc:getContextNodes" as="node()*" new-each-time="no">
+    <xsl:function name="hcmc:getContextNodes" as="node()*" _new-each-time="{$new-each-time}">
         <xsl:param name="contextEl" as="element()"/>
         <!--TODO: Remove if we no longer use accumulator-->
        <!-- <xsl:sequence select="$contextEl/descendant::text()[accumulator-before('context')[last()][. is $contextEl]]"/>-->
@@ -716,7 +691,7 @@
         <xd:param name="docUri" as="xs:string">The document URI (which is really an xs:anyURI)</xd:param>
         <xd:return>An integer count of all distinct terms in that document.</xd:return>
     </xd:doc>
-    <xsl:function name="hcmc:getTotalTermsInDoc" as="xs:integer" new-each-time="no">
+    <xsl:function name="hcmc:getTotalTermsInDoc" as="xs:integer" _new-each-time="{$new-each-time}">
         <xsl:param name="docUri" as="xs:string"/>
         <xsl:variable name="thisDoc" select="$tokenDocs[document-uri(.) = $docUri]" as="document-node()"/>
         <xsl:variable name="thisDocSpans" select="$thisDoc//span[@ss-stem]" as="element(span)*"/>
