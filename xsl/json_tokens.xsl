@@ -41,6 +41,7 @@
     </xd:doc>
     <xsl:param name="new-each-time" select="'yes'" as="xs:string" static="yes"/>
     
+    <xsl:variable name="useAccumulators" select="if ($new-each-time = 'yes') then false() else true()" static="yes"/>
     
     <!--**************************************************************
        *                                                            *
@@ -57,7 +58,8 @@
         <xd:desc>All stems from the tokenized docs; we use this in a few places.</xd:desc>
     </xd:doc>
     <!--Changed for a for per Saxon's recommendations-->
-    <xsl:variable name="stems" select="for $doc in $tokenDocs return $doc//span[@ss-stem]" as="element(span)*"/>
+    <xsl:variable name="stems" select="for $doc in $tokenDocs return $doc/descendant::span[@ss-stem]"
+        as="element(span)*"/>
     
     
     <!--**************************************************************
@@ -78,7 +80,7 @@
             
             has a weight of 1, not 6.</xd:desc>
     </xd:doc>
-    <xsl:accumulator name="weight" initial-value="1" as="xs:integer+">
+    <xsl:accumulator name="weight" initial-value="1" as="xs:integer+"  use-when="$useAccumulators">
         <xsl:accumulator-rule 
             match="*[@ss-wt]" 
             select="($value, xs:integer(@ss-wt))" 
@@ -88,18 +90,7 @@
             select="$value[position() lt last()]" 
             phase="end"/>
     </xsl:accumulator>
-    
-    
-   <!--JT: This accumulator added for 110, but causes overflow issues in LOI;
-       commented out temporarily while testing-->
-<!--    <xd:doc>
-        <xd:desc>Accumulator to keep track of the current context node.</xd:desc>
-    </xd:doc>
-    <xsl:accumulator name="context" initial-value="()">
-        <xsl:accumulator-rule match="*[@ss-ctx]" select="($value, .)" phase="start"/>
-        <xsl:accumulator-rule match="*[@ss-ctx]" select="$value[position() lt last()]" phase="end"/>
-    </xsl:accumulator>-->
-
+   
     
     <xd:doc>
         <xd:desc>Accumulator to keep track of custom @data-ss-* properties: on entering an element
@@ -186,7 +177,7 @@
        *                     createdStemmedTokenJson                *
        *                                                            *
        **************************************************************-->
-
+    
     <xd:doc>
         <xd:desc>The <xd:ref name="createStemmedTokenJson" type="template">createStemmedTokenJson</xd:ref> 
             is the meat of this process. It first groups the HTML span elements by their
@@ -195,9 +186,10 @@
     </xd:doc>
     <xsl:template name="createStemmedTokenJson">
         <xsl:message>Found <xsl:value-of select="$tokenizedDocsCount"/> tokenized documents...</xsl:message>
-        
+        <xsl:message use-when="$useAccumulators">USING ACCUMULATOR</xsl:message>
+        <xsl:message use-when="not($useAccumulators)">NOT USING ACCUMULATOR</xsl:message>
         <!--Group all of the stems by their values;  tokenizing is a bit overzealous here-->
-        <xsl:for-each-group select="$stems" group-by="tokenize(@ss-stem,'\s+')">
+        <xsl:for-each-group select="$stems" group-by="if (matches(@ss-stem,'\s')) then tokenize(@ss-stem) else string(@ss-stem)">
             <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
             <xsl:result-document href="{$outDir}/stems/{$stem}{$versionString}.json" method="json" _indent="{$indentJSON}">
                 <xsl:message><xsl:value-of select="current-output-uri()"/></xsl:message>
@@ -205,7 +197,9 @@
                 <xsl:call-template name="makeMap"/>
             </xsl:result-document>
         </xsl:for-each-group>
+        
     </xsl:template>
+  
     
     <xd:doc>
         <xd:desc>Template to output some better output messaging for the JSON process;
@@ -265,11 +259,11 @@
     </xd:doc>
     <xsl:template name="makeMap" as="map(*)">
         <!--The term we're creating a JSON for, inherited from the createMap template -->
-        <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
+        <xsl:param name="stem" select="current-grouping-key()" as="xs:string"/>
         
         <!--The group of all the terms (so all of the spans that have this particular term
             in its @ss-stem -->
-        <xsl:variable name="stemGroup" select="current-group()" as="element(span)*"/>
+        <xsl:param name="stemGroup" select="current-group()" as="element(span)*"/>
         
         <xsl:variable name="instances" as="map(*)*">
             <xsl:for-each-group select="$stemGroup"
@@ -667,7 +661,10 @@
     </xd:doc>
     <xsl:function name="hcmc:returnWeight" as="xs:integer" _new-each-time="{$new-each-time}">
         <xsl:param name="span" as="element(span)"/>
-        <xsl:sequence select="$span/accumulator-before('weight')[last()]"/>
+
+        <xsl:sequence select="$span/accumulator-before('weight')[last()]" use-when="$useAccumulators"/>
+        <xsl:sequence select="($span/ancestor::*[@ss-wt][1]/xs:integer(@ss-wt), 1)[1]" use-when="not($useAccumulators)"/>
+
     </xsl:function>
     
     <xd:doc>
