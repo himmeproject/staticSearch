@@ -167,6 +167,7 @@
         these do not have to be run in any particular order.</xd:desc>
     </xd:doc>
     <xsl:template match="/">
+        <xsl:message>NEW EACH TIME? <xsl:value-of select="$new-each-time"/></xsl:message>
         <xsl:call-template name="createStemmedTokenJson"/>
         <xsl:call-template name="createWordStringTxt"/>
     </xsl:template>
@@ -186,13 +187,13 @@
     </xd:doc>
     <xsl:template name="createStemmedTokenJson">
         <xsl:message>Found <xsl:value-of select="$tokenizedDocsCount"/> tokenized documents...</xsl:message>
-        <xsl:message use-when="$useAccumulators">USING ACCUMULATOR</xsl:message>
-        <xsl:message use-when="not($useAccumulators)">NOT USING ACCUMULATOR</xsl:message>
+<!--        <xsl:message use-when="$useAccumulators">USING ACCUMULATOR</xsl:message>
+        <xsl:message use-when="not($useAccumulators)">NOT USING ACCUMULATOR</xsl:message>-->
         <!--Group all of the stems by their values;  tokenizing is a bit overzealous here-->
         <xsl:for-each-group select="$stems" group-by="if (matches(@ss-stem,'\s')) then tokenize(@ss-stem) else string(@ss-stem)">
             <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
             <xsl:result-document href="{$outDir}/stems/{$stem}{$versionString}.json" method="json" _indent="{$indentJSON}">
-                <xsl:message><xsl:value-of select="current-output-uri()"/></xsl:message>
+              <!--  <xsl:message><xsl:value-of select="current-output-uri()"/></xsl:message>-->
                 <xsl:call-template name="makeTokenCounterMsg"/>
                 <xsl:call-template name="makeMap"/>
             </xsl:result-document>
@@ -259,11 +260,11 @@
     </xd:doc>
     <xsl:template name="makeMap" as="map(*)">
         <!--The term we're creating a JSON for, inherited from the createMap template -->
-        <xsl:param name="stem" select="current-grouping-key()" as="xs:string"/>
+        <xsl:variable name="stem" select="current-grouping-key()" as="xs:string"/>
         
         <!--The group of all the terms (so all of the spans that have this particular term
             in its @ss-stem -->
-        <xsl:param name="stemGroup" select="current-group()" as="element(span)*"/>
+        <xsl:variable name="stemGroup" select="current-group()" as="element(span)*"/>
         
         <xsl:variable name="instances" as="map(*)*">
             <xsl:for-each-group select="$stemGroup"

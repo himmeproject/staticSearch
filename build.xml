@@ -99,6 +99,11 @@
   <!--The directory for all of the static search assets (JSON files, Javascripts, et cetera).
         Note that the static search directory is placed directly within the collection directory-->
   <property name="staticSearchDir" value="${ssCollectionDirName}/${ssOutputFolder}/"/>
+  
+  <!--JT 2021-05-20: Temporarily adding a parameter for switching "new-each-time", which we may
+    need as a configuration option -->
+  <property name="new-each-time" value="no"/>
+  
 
   <!--The basename of the search file with suffix still attached-->
   <basename property="ssSearchPageBasename" file="${ssSearchFilePath}"/>
@@ -286,6 +291,7 @@
     <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
       <arg value="-xsl:${ssBaseDir}/xsl/json_tokens.xsl"/>
       <arg value="-s:${ssBaseDir}/xsl/json_tokens.xsl"/>
+      <arg value="new-each-time=${new-each-time}"/>
       <arg value="--suppressXsltNamespaceCheck:on"/>
     </java>
   </target>
@@ -301,6 +307,7 @@
     <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
       <arg value="-xsl:${ssBaseDir}/xsl/json_filters.xsl"/>
       <arg value="-s:${ssBaseDir}/xsl/json_filters.xsl"/>
+      <arg value="new-each-time=${new-each-time}"/>
       <arg value="--suppressXsltNamespaceCheck:on"/>
     </java>
   </target>
