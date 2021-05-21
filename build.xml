@@ -504,7 +504,17 @@
       TARGET: allButValidate
       Target to override validation, which is helpful in cases
       where the HTML output has been validated by a stricter set of validation rules (like the VNU
-      validator) </description>
+      validator), </description>
+  </target>
+  
+  <target name="noValidateNoReport"
+    depends="init, config, tokenize, jsonTokens, jsonFilters, buildJS, createStemsFile, copyFiles, makeSearchPage, clean">
+    <description>
+      TARGET: noValidateNoReport
+      Target to override both validation and report generation, which is helpful in cases
+      of larger projects where HTML validation is already handled, and the report is not
+      normally used or needed.
+    </description>
   </target>
 
   <target name="test"

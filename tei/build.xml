@@ -133,7 +133,7 @@
       TARGET buildStaticSearch
       This invokes the search build process.
     </description>
-    <ant antfile="${basedir}/../build.xml" inheritall="false">
+    <ant antfile="${basedir}/../build.xml" inheritall="false" target="noValidateNoReport">
       <property name="ssConfig" value="tei/config_tei.xml"/>
     </ant>
   </target>
