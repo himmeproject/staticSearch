@@ -27,9 +27,8 @@
     <xsl:param name="token" as="xs:string"/>
     <!--  <xsl:value-of select="normalize-unicode(replace(normalize-unicode(.,'NFKD'),'\p{Mn}',''),'NFKC')" /> -->
 <!--    <xsl:value-of select="replace(replace(normalize-unicode($token, 'NFD'), '[\p{M}]', ''),'ʿ|ʾ','')"/>-->
-    <xsl:variable name="str1" select="replace($token,'[آإأٱ]','ا')"/>
-    <xsl:variable name="str2" select="replace($str1,'^al-','')"/>
-    <xsl:sequence select="replace(replace(normalize-unicode($str2, 'NFD'),'[&#x0300;-&#x036f;]', ''),'[ʿʾ]','')"/>
+    <xsl:variable name="str1" select="replace(replace(replace(replace($token,'^(ال)',''),'[آإأٱ]','ا'),'^al-',''),'&#x0308;','')"/>
+    <xsl:sequence select="replace(replace(normalize-unicode($str1, 'NFD'),'[&#x0300;-&#x036f;]', ''),'[ʿʾ]','')"/>
   </xsl:function>
   
   

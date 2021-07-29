@@ -46,8 +46,9 @@ class SSStemmer{
    * @return {String}       the stemmed token
    */
    stem(token){
-   var string = token.replace(/[آإأٱ]/g,'ا');
-   return string.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^al\-/g,'').replace(/[ʿʾ]/g, '');
+   //var string = token.replace(/(^|\s)(ال|أل|ٱل)/g,'').replace(/[آإأٱ]/g,'ا');
+   var string = token.replace(/^(ال)/g,'').replace(/[آإأٱ]/g,'ا');
+   return string.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\u0308]/g, '').replace(/^al\-/g,'').replace(/[ʿʾ]/g, '');
    //return string.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^al-(\S+)/g,'').replace(/[ʿʾ]/g, '');
   // return token.normalize('NFD').replace(/[\p{M}]/g, '');
    }
