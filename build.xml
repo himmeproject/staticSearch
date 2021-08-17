@@ -67,6 +67,9 @@
 
   <!--The full path to the configuration file. You can use either this or ssConfig. -->
   <property name="ssConfigFile" value="${ssBaseDir}/${ssConfig}"/>
+  
+  <!-- Get the config file name in case it was passed as a full path. -->
+  <basename property="ssConfigFileName" file="${ssConfigFile}"/>
 
   <!--The derived name of the configuration directory based off of the configuration
         file path-->
@@ -77,6 +80,10 @@
 
   <!--Set the verbose flag to false by default; set to true to see detailed messages-->
   <property name="ssVerbose" value="false"/>
+  
+  <!--Set the verboseReport flag to false by default; set to true to allow the report 
+      generation process to create an exhaustive report (may trigger out-of-memory errors). -->
+  <property name="ssVerboseReport" value="false"/>
 
   <!--The path to the search page, relative to the configuration directory-->
   <property name="ssSearchFilePath" location="${configDir}/${config.params.searchFile}"/>
@@ -98,7 +105,7 @@
 
   <!--The directory for all of the static search assets (JSON files, Javascripts, et cetera).
         Note that the static search directory is placed directly within the collection directory-->
-  <property name="staticSearchDir" value="${ssCollectionDirName}/${ssOutputFolder}/"/>
+  <property name="staticSearchDir" value="${ssCollectionDirName}/${ssOutputFolder}"/>
 
   <!--The basename of the search file with suffix still attached-->
   <basename property="ssSearchPageBasename" file="${ssSearchFilePath}"/>
@@ -122,7 +129,7 @@
       deletes any previous results from an earlier build and then recreates the staticSearchDir,
       which is simply the parent directory of the search file specified in the config file. In the
       special case of the test, this target also generates the VERSION file. </description>
-    <echo message="Initializing..."/>
+    <echo message="Initializing staticSearch build using codebase in ${ssBaseDir}..."/>
     <echo message="Deleting old products..."/>
     <delete dir="temp"/>
     <delete file="${ssBaseDir}/xsl/config.xsl"/>
@@ -130,6 +137,9 @@
     <delete dir="${staticSearchDir}"/>
     <echo message="Creating new static search directory: ${staticSearchDir}"/>
     <mkdir dir="${staticSearchDir}"/>
+
+    <echo>Running staticSearch build based on config file: 
+    ${ssConfigFile}</echo>
 
     <!-- For version 1.2 only, we need to warn users if they're still using
              the old config and configFile property names as parameters. -->
@@ -153,9 +163,13 @@
       </then>
     </if>
 
-    <!-- If we're building the test data, we need to generate the VERSION file. -->
+    <!-- If we're building the test data, we need to generate the VERSION file
+         and also copy the .htm_ files to .html before starting. -->
     <if>
-      <equals arg1="${ssBaseDir}/configTest.xml" arg2="${ssConfigFile}"/>
+      <or>
+        <equals arg1="configTest.xml" arg2="${ssConfigFileName}"/>
+        <equals arg1="configTestWorthReading.xml" arg2="${ssConfigFileName}"/>
+      </or>
       <then>
         <delete file="${ssBaseDir}/test/VERSION"/>
         <exec executable="git">
@@ -164,6 +178,23 @@
           <arg value="HEAD"/>
           <redirector output="${ssBaseDir}/test/VERSION"/>
         </exec>
+      </then>
+    </if>
+    <!-- If this build is one of our two tests, then we need to copy the 
+      template file for the search page (*.htm_) to its output file (*.html) so the
+      build process can use it. This enables us to avoid a constantly-changing 
+      .html file that causes endless merge conflicts.
+    -->
+    <if>
+      <equals arg1="configTest.xml" arg2="${ssConfigFileName}"/>
+      <then>
+        <copy file="${ssBaseDir}/test/search.htm_" tofile="${ssBaseDir}/test/search.html"/>
+      </then>
+    </if>
+    <if>
+      <equals arg1="configTestWorthReading.xml" arg2="${ssConfigFileName}"/>
+      <then>
+        <copy file="${ssBaseDir}/test/searchWorthReading.htm_" tofile="${ssBaseDir}/test/searchWorthReading.html"/>
       </then>
     </if>
   </target>
@@ -275,31 +306,6 @@
     </java>
   </target>
 
-  <target name="createStemsFile">
-    <description>
-      TARGET: createStemsFile
-      This target creates the ssStems.json file by first
-      retrieving the length of all the JSONs available, and then create a JSON from that document.
-      This is necessary for running wildcard searches. </description>
-    <echo message="Creating ssStems.json file..."/>
-    <echo message="First, measure the JSON files..."/>
-    <length property="stemLines" mode="each">
-      <fileset dir="${staticSearchDir}">
-        <include name="stems/**.json"/>
-      </fileset>
-    </length>
-    <echo message="Now create the tokens file..."/>
-    <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true">
-      <arg value="-xsl:${ssBaseDir}/xsl/create_ssStems.xsl"/>
-      <arg value="-s:${ssBaseDir}/xsl/create_ssStems.xsl"/>
-      <arg value="stemLines=${stemLines}"/>
-      <arg value="--suppressXsltNamespaceCheck:on"/>
-    </java>
-  </target>
-
-
-
-
   <target name="makeSearchPage">
     <description>
       TARGET: makeSearchPage
@@ -371,11 +377,18 @@
             inject into the page. It is more efficient to derive the existence of the filters directory here rather than
             in the XSLT.-->
     <available type="dir" property="hasFilters" file="${staticSearchDir}/filters" value="true"/>
+    <resourcecount property="stemFileCount">
+      <fileset dir="${staticSearchDir}/stems">
+        <include name="*.json"/>
+      </fileset>
+    </resourcecount>
     <java classpath="${ssSaxon}" classname="net.sf.saxon.Transform" failonerror="true" fork="true">
       <arg value="-xsl:${ssBaseDir}/xsl/create_reports.xsl"/>
       <arg value="-s:${ssBaseDir}/xsl/create_reports.xsl"/>
       <arg value="--suppressXsltNamespaceCheck:on"/>
       <arg value="hasFilters=${hasFilters}"/>
+      <arg value="stemFileCount=${stemFileCount}"/>
+      <arg value="verboseReport=${ssVerboseReport}"/>
       <jvmarg value="-Xmx2048m"/>
     </java>
     <move file="${ssBaseDir}/staticSearch_report.html"
@@ -454,7 +467,7 @@
   </target>
 
   <target name="all"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
+    depends="init, validate, config, tokenize, json, buildJS, copyFiles, makeSearchPage, report, clean">
     <description>
       TARGET: all
       Default target for running the entire static search creation process.
@@ -462,7 +475,7 @@
   </target>
 
   <target name="allButValidate"
-    depends="init, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, report, clean">
+    depends="init, config, tokenize, json, buildJS, copyFiles, makeSearchPage, report, clean">
     <description>
       TARGET: allButValidate
       Target to override validation, which is helpful in cases
@@ -471,7 +484,7 @@
   </target>
 
   <target name="test"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, makeDebugSearchPage, report">
+    depends="init, validate, config, tokenize, json, buildJS, copyFiles, makeSearchPage, makeDebugSearchPage, report">
     <description>
       TARGET: test
       Target that runs the whole process, but does not clean up the
@@ -480,7 +493,7 @@
   </target>
 
   <target name="basic"
-    depends="init, validate, config, tokenize, json, buildJS, createStemsFile, copyFiles, makeSearchPage, clean">
+    depends="init, validate, config, tokenize, json, buildJS, copyFiles, makeSearchPage, clean">
     <description>
       TARGET: basic
       Target that runs the whole process other than the report creation.
